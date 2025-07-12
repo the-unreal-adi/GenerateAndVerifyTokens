@@ -5,7 +5,7 @@ namespace KeyRotationDerivation
 {
     internal static class Hkdf
     {
-        public static byte[] Extract(byte[] salt, byte[] ikm)
+        public static byte[] Extract(byte[]? salt, byte[] ikm)
         {
             using var hmac = new HMACSHA256(salt ?? new byte[32]);
             return hmac.ComputeHash(ikm);
@@ -36,7 +36,7 @@ namespace KeyRotationDerivation
             return okm;
         }
 
-        public static byte[] DeriveKey(byte[] ikm, byte[] info, byte[] salt = null, int length = 32)
+        public static byte[] DeriveKey(byte[] ikm, byte[] info, byte[]? salt = null, int length = 32)
         {
             var prk = Extract(salt, ikm);
             return Expand(prk, info, length);
