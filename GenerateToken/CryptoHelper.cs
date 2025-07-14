@@ -9,12 +9,12 @@ namespace GenerateToken
         { 
             try
             {
-                string rootHex = BitConverter.ToString(SHA256.HashData(Encoding.UTF8.GetBytes($"{root}|{DateTime.UtcNow.Hour}"))).Replace("-", "").ToLowerInvariant();
+                string rootHex = BitConverter.ToString(SHA256.HashData(Encoding.UTF8.GetBytes($"{root}|sign|{DateTime.UtcNow.Hour}"))).Replace("-", "").ToLowerInvariant();
                 byte[] rootSeed = Encoding.UTF8.GetBytes(rootHex);
                 var kds = new KeyDerivationService(rootSeed);
                 DateTime today = DateTime.UtcNow.Date;
                 int intervalDuration = 60;
-                string saltHex = BitConverter.ToString(SHA256.HashData(Encoding.UTF8.GetBytes($"{salt}|{DateTime.UtcNow.Hour}"))).Replace("-", "").ToLowerInvariant();
+                string saltHex = BitConverter.ToString(SHA256.HashData(Encoding.UTF8.GetBytes($"{salt}|sign|{DateTime.UtcNow.Hour}"))).Replace("-", "").ToLowerInvariant();
                 using ECDsa slotKey = kds.DeriveSlotKey(today, intervalDuration, saltHex);
 
                 byte[] privBytes = slotKey.ExportPkcs8PrivateKey();
