@@ -1,30 +1,62 @@
 ﻿using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 
 namespace GenerateToken
 {
     internal class CryptoHelper
     {
+        private static readonly Dictionary<string, DateTime> _validPrivateKeys = [];
+
         private static string GeneratePrivateKey(string root, string salt)
         { 
             try
             {
-                string rootHex = BitConverter.ToString(SHA256.HashData(Encoding.UTF8.GetBytes($"{root}|sign|{DateTime.UtcNow.Hour}"))).Replace("-", "").ToLowerInvariant();
+                lock (_validPrivateKeys)
+                {
+                    var signEntries = _validPrivateKeys
+                        .Where(kvp => kvp.Key.StartsWith("sign-" + root + ":"))
+                        .ToList();
+
+                    foreach (var kvp in signEntries)
+                    {
+                        if (kvp.Value <= DateTime.UtcNow)
+                        {
+                            _validPrivateKeys.Remove(kvp.Key);
+                        }
+                        else
+                        {
+                            return kvp.Key.Split(":")[1];
+                        }
+                    }
+                }
+
+                DateTime now = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, DateTime.UtcNow.Day, DateTime.UtcNow.Hour, 0, 0, DateTimeKind.Utc);
+                string rootHex = BitConverter.ToString(SHA256.HashData(Encoding.UTF8.GetBytes($"{root}|MDRiMjk0ODAyMzNmNGRlZjVjODc1ODc1YjZiZGMzYjE=|{now}"))).Replace("-", "").ToLowerInvariant();
                 byte[] rootSeed = Encoding.UTF8.GetBytes(rootHex);
                 var kds = new KeyDerivationService(rootSeed);
                 DateTime today = DateTime.UtcNow.Date;
                 int intervalDuration = 60;
-                string saltHex = BitConverter.ToString(SHA256.HashData(Encoding.UTF8.GetBytes($"{salt}|sign|{DateTime.UtcNow.Hour}"))).Replace("-", "").ToLowerInvariant();
+                string saltHex = BitConverter.ToString(SHA256.HashData(Encoding.UTF8.GetBytes($"{salt}|MDRiMjk0ODAyMzNmNGRlZjVjODc1ODc1YjZiZGMzYjE=|{now}"))).Replace("-", "").ToLowerInvariant();
                 using ECDsa slotKey = kds.DeriveSlotKey(today, intervalDuration, saltHex);
 
                 byte[] privBytes = slotKey.ExportPkcs8PrivateKey();
+                string privateKey = Convert.ToBase64String(privBytes);
 
-                return Convert.ToBase64String(privBytes);
+                lock (_validPrivateKeys)
+                {
+                    if (!_validPrivateKeys.ContainsKey("sign-" + root + ":" + privateKey))
+                    {
+                        DateTime expiry = now.AddHours(1);
+                        _validPrivateKeys["sign-" + root + ":" + privateKey] = expiry;
+                    }
+                }
+
+                return privateKey;
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                Console.WriteLine("Error generating private key.");
-                return string.Empty;
+                throw new Exception($"Error generating private key: {ex.Message}", ex);
             }
         }
 
@@ -34,8 +66,7 @@ namespace GenerateToken
             {
                 if (string.IsNullOrWhiteSpace(origin))
                 {
-                    Console.WriteLine("Missing token or origin.");
-                    return "";
+                    throw new ArgumentException("Origin cannot be null or empty.", nameof(origin));
                 }
 
                 string privateKey = GeneratePrivateKey(root, salt);
@@ -62,10 +93,9 @@ namespace GenerateToken
 
 
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                Console.WriteLine("Error generating token for origin {Origin}", origin);
-                return "";
+                throw new Exception($"Error generating token: {ex.Message}", ex);
             }
         }
     }
